@@ -1,0 +1,18 @@
+{
+  "name": "Compark - Valle de Egüés",
+  "short_name": "Compark",
+  "description": "App de aparcamiento inteligente y dinamización del comercio local en Valle de Egüés",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#10b981",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
