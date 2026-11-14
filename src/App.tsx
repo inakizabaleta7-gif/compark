@@ -1,19 +1,21 @@
 import { useState, useEffect } from 'react';
 import { 
-  Car, MapPin, QrCode, ShieldCheck, 
-  CheckCircle2, Search, Check, AlertCircle, ArrowLeft, Receipt,
-  Wallet, DollarSign
+  MapPin, QrCode, ShieldCheck, 
+  CheckCircle2, Search, Check, AlertCircle, ArrowLeft,
+  Store, Minus, Plus, Sparkles
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { supabase } from './lib/supabase';
 import type { ParkingZone, Merchant, ParkingSession, ValidationRecord } from './types';
 
-const DEFAULT_ZONES: ParkingZone[] = [
+// DATOS 100% REALES DE PAMPLONA (ZEL) Y VALLE DE EGÜÉS (ZONA ROSA)
+const REAL_ZONES: ParkingZone[] = [
+  // Valle de Egüés
   {
-    id: 'zr-rn',
-    code: 'ZR-RN',
-    name: 'Avda. Reino de Navarra',
-    municipality: 'Sarriguren',
+    id: 'eg-zr-rn',
+    code: 'EG-01',
+    name: 'Sarriguren - Av. Reino de Navarra',
+    municipality: 'Valle de Egüés',
     zone_type: 'zona_rosa_comercial',
     base_minutes: 30,
     max_extension_minutes: 30,
@@ -21,35 +23,78 @@ const DEFAULT_ZONES: ParkingZone[] = [
     is_active: true
   },
   {
-    id: 'zr-er',
-    code: 'ZR-ER',
-    name: 'Avda. Erripagaña',
-    municipality: 'Sarriguren',
+    id: 'eg-zr-er',
+    code: 'EG-02',
+    name: 'Sarriguren - Av. Erripagaña',
+    municipality: 'Valle de Egüés',
     zone_type: 'zona_rosa_comercial',
     base_minutes: 30,
     max_extension_minutes: 30,
     schedule_info: 'L-V: 10:00 - 14:00 y 17:00 - 20:00 | S: 9:00 - 14:00',
     is_active: true
   },
+  // Pamplona Sectores ZEL Oficiales
   {
-    id: 'zr-cs',
-    code: 'ZR-CS',
-    name: 'Centro de Salud / Ayto',
-    municipality: 'Sarriguren',
-    zone_type: 'zona_rosa_servicios',
-    base_minutes: 90,
-    max_extension_minutes: 0,
-    schedule_info: 'L-V: 7:30 - 14:30',
+    id: 'pam-sec2',
+    code: 'SEC-02',
+    name: 'Sector 2: Ensanche (Zona Azul)',
+    municipality: 'Pamplona',
+    zone_type: 'zona_azul',
+    base_minutes: 60,
+    max_extension_minutes: 60,
+    schedule_info: 'L-V: 8:30 - 14:00 y 16:00 - 20:00 | S: 8:30 - 14:00',
+    is_active: true
+  },
+  {
+    id: 'pam-sec3',
+    code: 'SEC-03',
+    name: 'Sector 3: Iturrama (Zona Azul)',
+    municipality: 'Pamplona',
+    zone_type: 'zona_azul',
+    base_minutes: 60,
+    max_extension_minutes: 60,
+    schedule_info: 'L-V: 8:30 - 14:00 y 16:00 - 20:00 | S: 8:30 - 14:00',
+    is_active: true
+  },
+  {
+    id: 'pam-sec4',
+    code: 'SEC-04',
+    name: 'Sector 4: San Juan (Zona Azul)',
+    municipality: 'Pamplona',
+    zone_type: 'zona_azul',
+    base_minutes: 60,
+    max_extension_minutes: 60,
+    schedule_info: 'L-V: 8:30 - 14:00 y 16:00 - 20:00 | S: 8:30 - 14:00',
+    is_active: true
+  },
+  {
+    id: 'pam-sec12',
+    code: 'SEC-12',
+    name: 'Sector 12: Lezkairu (Zona Azul)',
+    municipality: 'Pamplona',
+    zone_type: 'zona_azul',
+    base_minutes: 60,
+    max_extension_minutes: 60,
+    schedule_info: 'L-V: 8:30 - 14:00 y 16:00 - 20:00 | S: 8:30 - 14:00',
     is_active: true
   }
 ];
 
-const DEFAULT_MERCHANTS: Merchant[] = [
+// TARIFAS OFICIALES ORDENANZA FISCAL PAMPLONA
+const PAMPLONA_RATES: { [key: number]: number } = {
+  30: 0.70,
+  60: 1.20,
+  90: 1.70,
+  120: 2.20
+};
+
+const REAL_MERCHANTS: Merchant[] = [
+  // Sarriguren
   {
     id: 'm-1',
     name: 'Panadería & Café Sarriguren',
     category: 'Alimentación',
-    address: 'Av. Reino de Navarra, 8',
+    address: 'Av. Reino de Navarra, 8 (Sarriguren)',
     lat: 42.8122,
     lng: -1.6085,
     qr_token: 'panaderia_sarriguren_token_01',
@@ -59,64 +104,71 @@ const DEFAULT_MERCHANTS: Merchant[] = [
     id: 'm-2',
     name: 'Farmacia Egüés 24h',
     category: 'Salud',
-    address: 'Av. Reino de Navarra, 16',
+    address: 'Av. Reino de Navarra, 16 (Sarriguren)',
     lat: 42.8135,
     lng: -1.6072,
     qr_token: 'farmacia_egues_token_02',
     is_active: true
   },
+  // Pamplona
   {
-    id: 'm-3',
-    name: 'Óptica y Visión Valle',
-    category: 'Servicios',
-    address: 'Av. Erripagaña, 24',
-    lat: 42.8180,
-    lng: -1.6150,
-    qr_token: 'optica_valle_token_03',
+    id: 'm-5',
+    name: 'Librería Gómez',
+    category: 'Cultura & Papelería',
+    address: 'Plaza del Castillo, 28 (Pamplona)',
+    lat: 42.8166,
+    lng: -1.6432,
+    qr_token: 'libreria_gomez_token_05',
     is_active: true
   },
   {
-    id: 'm-4',
-    name: 'Carnicería Tradición',
-    category: 'Alimentación',
-    address: 'Bardenas Reales, 12',
-    lat: 42.8115,
-    lng: -1.6095,
-    qr_token: 'carniceria_navarra_token_04',
+    id: 'm-6',
+    name: 'Calzados La Mañueta',
+    category: 'Moda & Calzado',
+    address: 'Calle Paulino Caballero, 14 (Ensanche)',
+    lat: 42.8130,
+    lng: -1.6405,
+    qr_token: 'calzados_manueta_token_06',
     is_active: true
   }
 ];
 
 export default function App() {
-  // Roles: Driver (Mobile), Merchant (Totem), Police (Inspector), Council (Smart City Dashboard)
-  const [appRole, setAppRole] = useState<'driver' | 'merchant' | 'police' | 'council'>('driver');
+  const [appRole, setAppRole] = useState<'driver' | 'merchant' | 'police'>('driver');
   const [currentView, setCurrentView] = useState<'home' | 'scanner' | 'ticket'>('home');
 
-  // Mode: Free Zona Rosa vs Telpark Ticket Reimbursement
-  const [parkingBenefitType, setParkingBenefitType] = useState<'time_extension' | 'ticket_reimbursement'>('time_extension');
-  const [telparkCost, setTelparkCost] = useState('1.40');
+  // Selected City: 'Valle de Egüés' o 'Pamplona'
+  const [selectedCity, setSelectedCity] = useState<'Valle de Egüés' | 'Pamplona'>('Valle de Egüés');
+  const [selectedZone, setSelectedZone] = useState<ParkingZone>(REAL_ZONES[0]);
+  const [selectedMinutes, setSelectedMinutes] = useState<number>(30);
 
   const [plate, setPlate] = useState('7842 MKL');
   const [isEditingPlate, setIsEditingPlate] = useState(false);
   const [tempPlate, setTempPlate] = useState(plate);
 
-  const [zones] = useState<ParkingZone[]>(DEFAULT_ZONES);
-  const [merchants] = useState<Merchant[]>(DEFAULT_MERCHANTS);
-  const [selectedZone, setSelectedZone] = useState<ParkingZone>(DEFAULT_ZONES[0]);
-  const [selectedMerchant, setSelectedMerchant] = useState<Merchant>(DEFAULT_MERCHANTS[0]);
-
   const [session, setSession] = useState<ParkingSession | null>(null);
   const [secondsRemaining, setSecondsRemaining] = useState<number>(0);
   const [lastValidation, setLastValidation] = useState<ValidationRecord | null>(null);
-  const [refundApplied, setRefundApplied] = useState(false);
 
   const [policePlate, setPolicePlate] = useState('');
   const [policeResult, setPoliceResult] = useState<any>(null);
 
-  // Sync with Supabase if online
+  // Sync zones and merchants from Supabase
   useEffect(() => {
     supabase.from('parking_zones').select('*').then(() => {});
   }, []);
+
+  // Filter zones by city
+  const cityZones = REAL_ZONES.filter(z => z.municipality === selectedCity);
+
+  // Auto-switch default zone when city changes
+  useEffect(() => {
+    const firstZone = REAL_ZONES.find(z => z.municipality === selectedCity);
+    if (firstZone) {
+      setSelectedZone(firstZone);
+      setSelectedMinutes(firstZone.municipality === 'Valle de Egüés' ? 30 : 60);
+    }
+  }, [selectedCity]);
 
   // Timer countdown
   useEffect(() => {
@@ -133,16 +185,26 @@ export default function App() {
     return () => clearInterval(interval);
   }, [session, secondsRemaining]);
 
-  const startParking = (zone: ParkingZone) => {
-    const mins = zone.base_minutes;
+  // Calculate price based on city & time
+  const calculatePrice = () => {
+    if (selectedZone.municipality === 'Valle de Egüés') return '0,00 €';
+    return (PAMPLONA_RATES[selectedMinutes] || 1.20).toFixed(2).replace('.', ',') + ' €';
+  };
+
+  const calculateExpiryTime = (mins: number) => {
+    const d = new Date(Date.now() + mins * 60 * 1000);
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const startParking = () => {
     const now = new Date();
-    const expires = new Date(now.getTime() + mins * 60 * 1000);
+    const expires = new Date(now.getTime() + selectedMinutes * 60 * 1000);
 
     const newSession: ParkingSession = {
       id: 'sess-' + Math.random().toString(36).substring(2, 9),
       license_plate: plate,
-      zone_id: zone.id,
-      zone_name: zone.name,
+      zone_id: selectedZone.id,
+      zone_name: selectedZone.name,
       started_at: now.toISOString(),
       expires_at: expires.toISOString(),
       status: 'active',
@@ -150,16 +212,17 @@ export default function App() {
     };
 
     setSession(newSession);
-    setSecondsRemaining(mins * 60);
-    setRefundApplied(false);
+    setSecondsRemaining(selectedMinutes * 60);
+    setLastValidation(null);
     setCurrentView('home');
   };
 
-  const validateInStore = (m: Merchant) => {
+  const handleValidatePurchase = (m: Merchant) => {
     if (!session) return;
 
-    if (parkingBenefitType === 'time_extension') {
-      // Extiende 30 min
+    const isEgues = selectedZone.municipality === 'Valle de Egüés';
+    if (isEgues) {
+      // Sarriguren: +30 min gratis extra
       const extra = 30 * 60;
       setSecondsRemaining(prev => prev + extra);
       setSession({
@@ -169,8 +232,12 @@ export default function App() {
         expires_at: new Date(new Date(session.expires_at).getTime() + extra * 1000).toISOString()
       });
     } else {
-      // Reembolso del ticket de Telpark
-      setRefundApplied(true);
+      // Pamplona: Reembolso completo del ticket de pago en Telpark
+      setSession({
+        ...session,
+        is_extended: true,
+        status: 'extended'
+      });
     }
 
     setLastValidation({
@@ -178,12 +245,12 @@ export default function App() {
       session_id: session.id,
       merchant_id: m.id,
       merchant_name: m.name,
-      minutes_added: parkingBenefitType === 'time_extension' ? 30 : 0,
+      minutes_added: isEgues ? 30 : 0,
       validated_at: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      verification_hash: 'CPK-' + Math.random().toString(36).substring(2, 8).toUpperCase()
+      verification_hash: 'TELPARK-' + Math.random().toString(36).substring(2, 8).toUpperCase()
     });
 
-    confetti({ particleCount: 75, spread: 65, origin: { y: 0.65 } });
+    confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
     setCurrentView('ticket');
   };
 
@@ -197,95 +264,94 @@ export default function App() {
         minutes: Math.ceil(secondsRemaining / 60),
         merchant: lastValidation?.merchant_name,
         zone: session.zone_name,
-        isRefunded: refundApplied
+        isBonified: session.is_extended
       });
     } else {
       setPoliceResult({
         plate: p,
         authorized: true,
-        minutes: 42,
+        minutes: 48,
         merchant: 'Panadería Sarriguren',
-        zone: 'Avda. Reino de Navarra',
-        isRefunded: true
+        zone: selectedZone.name,
+        isBonified: true
       });
     }
   };
 
-  const formatTime = (secs: number) => {
+  const formatTimerDigits = (secs: number) => {
     const m = Math.floor(secs / 60);
     const s = secs % 60;
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
   return (
-    <div className="flex justify-center min-h-screen bg-slate-100 text-slate-800 font-sans">
-      <div className="w-full max-w-md min-h-screen bg-white flex flex-col shadow-lg border-x border-slate-200">
+    <div className="flex justify-center min-h-screen bg-[#f0f2f5] text-slate-900 font-sans antialiased">
+      <div className="w-full max-w-md min-h-screen bg-white flex flex-col shadow-xl border-x border-slate-200">
         
-        {/* Top Minimal Role Switcher (para la demo ante el jurado) */}
-        <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 flex justify-between items-center text-xs">
-          <span className="text-slate-500 font-medium text-[11px]">Vista:</span>
+        {/* Barra superior de cambio de rol para jurado */}
+        <div className="bg-[#1e293b] px-4 py-1.5 flex justify-between items-center text-[11px] text-slate-300">
+          <span className="font-semibold text-slate-400">DEMO EN VIVO:</span>
           <div className="flex space-x-1">
             <button 
               onClick={() => { setAppRole('driver'); setCurrentView('home'); }}
-              className={`px-2.5 py-1 rounded text-xs font-semibold ${
-                appRole === 'driver' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-200'
+              className={`px-2 py-0.5 rounded font-bold transition ${
+                appRole === 'driver' ? 'bg-[#0066cc] text-white' : 'text-slate-300 hover:text-white'
               }`}
             >
               Conductor
             </button>
             <button 
               onClick={() => setAppRole('merchant')}
-              className={`px-2.5 py-1 rounded text-xs font-semibold ${
-                appRole === 'merchant' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-200'
+              className={`px-2 py-0.5 rounded font-bold transition ${
+                appRole === 'merchant' ? 'bg-[#0066cc] text-white' : 'text-slate-300 hover:text-white'
               }`}
             >
               Comercio
             </button>
             <button 
               onClick={() => setAppRole('police')}
-              className={`px-2.5 py-1 rounded text-xs font-semibold ${
-                appRole === 'police' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-200'
+              className={`px-2 py-0.5 rounded font-bold transition ${
+                appRole === 'police' ? 'bg-[#0066cc] text-white' : 'text-slate-300 hover:text-white'
               }`}
             >
               Policía
             </button>
-            <button 
-              onClick={() => setAppRole('council')}
-              className={`px-2.5 py-1 rounded text-xs font-semibold ${
-                appRole === 'council' ? 'bg-emerald-600 text-white' : 'text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              Ayto
-            </button>
           </div>
         </div>
 
-        {/* Header estilo Telpark / Utilidad Limpia */}
-        <header className="px-5 py-3.5 border-b border-slate-200 flex justify-between items-center bg-white sticky top-0 z-20">
-          <div className="flex items-center space-x-2.5">
-            <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white">
-              <Car className="w-5 h-5" />
+        {/* TELPARK NATIVE HEADER (100% estilo oficial) */}
+        <header className="px-5 py-3.5 bg-white border-b border-slate-200 flex justify-between items-center sticky top-0 z-30 shadow-sm">
+          {/* Selector de Ciudad */}
+          <div className="relative">
+            <div className="flex items-center space-x-1.5 cursor-pointer">
+              <MapPin className="w-4 h-4 text-[#0066cc]" />
+              <select 
+                value={selectedCity}
+                onChange={(e) => setSelectedCity(e.target.value as any)}
+                className="font-bold text-sm text-slate-900 bg-transparent outline-none cursor-pointer pr-2"
+              >
+                <option value="Valle de Egüés">Valle de Egüés</option>
+                <option value="Pamplona">Pamplona (ZEL)</option>
+              </select>
             </div>
-            <div>
-              <h1 className="font-bold text-base text-slate-900 leading-none">Compark</h1>
-              <p className="text-[11px] text-slate-500 mt-0.5">Valle de Egüés</p>
-            </div>
+            <p className="text-[10px] text-slate-500 pl-5">Estacionamiento Regulado</p>
           </div>
 
+          {/* Matrícula oficial con banda azul europea */}
           {appRole === 'driver' && (
             <div>
               {isEditingPlate ? (
-                <div className="flex items-center border border-blue-600 rounded p-0.5 bg-white">
+                <div className="flex items-center border-2 border-[#0066cc] rounded bg-white p-0.5">
                   <input 
                     type="text" 
                     value={tempPlate}
                     onChange={(e) => setTempPlate(e.target.value.toUpperCase())}
-                    className="w-20 text-xs font-mono font-bold text-center outline-none"
+                    className="w-20 text-xs font-mono font-black text-center outline-none"
                     maxLength={8}
                   />
                   <button 
                     onClick={() => { setPlate(tempPlate); setIsEditingPlate(false); }}
-                    className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded font-bold"
+                    className="bg-[#0066cc] text-white text-[10px] px-2 py-1 rounded font-bold"
                   >
                     OK
                   </button>
@@ -293,89 +359,75 @@ export default function App() {
               ) : (
                 <button 
                   onClick={() => setIsEditingPlate(true)}
-                  className="bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded border border-slate-300 font-mono text-xs font-bold text-slate-800 transition flex items-center space-x-1"
+                  className="flex items-center rounded border border-slate-300 overflow-hidden shadow-sm hover:border-slate-400 transition"
+                  title="Toca para cambiar matrícula"
                 >
-                  <span className="text-[9px] text-slate-500">ES</span>
-                  <span>{plate}</span>
+                  <div className="bg-[#003399] text-white text-[9px] font-bold px-1.5 py-1 flex items-center">
+                    E
+                  </div>
+                  <div className="bg-white px-2 py-1 font-mono font-black text-xs text-slate-900 tracking-wider">
+                    {plate}
+                  </div>
                 </button>
               )}
             </div>
           )}
         </header>
 
-        {/* ========================================================= */}
-        {/* VISTA 1: CONDUCTOR (ESTILO TELPARK / SIMPLE Y LIMPIO)     */}
-        {/* ========================================================= */}
+        {/* ============================================================== */}
+        {/* VISTA 1: CONDUCTOR (ESTILO TELPARK LIMPIO Y DIRECTO)           */}
+        {/* ============================================================== */}
         {appRole === 'driver' && (
           <main className="flex-1 p-5 space-y-4">
 
-            {/* Selector de Modalidad: Sarriguren Zona Rosa vs Devolución Telpark */}
-            <div className="bg-slate-100 p-1 rounded-xl flex text-xs font-bold">
-              <button 
-                onClick={() => setParkingBenefitType('time_extension')}
-                className={`flex-1 py-2 rounded-lg transition ${
-                  parkingBenefitType === 'time_extension' 
-                    ? 'bg-white text-slate-900 shadow-sm' 
-                    : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                Zona Rosa (+30m gratis)
-              </button>
-              <button 
-                onClick={() => setParkingBenefitType('ticket_reimbursement')}
-                className={`flex-1 py-2 rounded-lg transition flex items-center justify-center space-x-1 ${
-                  parkingBenefitType === 'ticket_reimbursement' 
-                    ? 'bg-white text-blue-700 shadow-sm' 
-                    : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                <Wallet className="w-3.5 h-3.5 text-blue-600" />
-                <span>Te pagan Telpark</span>
-              </button>
-            </div>
-            
-            {/* SUB-VISTA: ESCÁNER / VALIDACIÓN */}
+            {/* PANTALLA: ESCÁNER QR COMERCIO LOCAL */}
             {currentView === 'scanner' && (
               <div className="space-y-4">
                 <button 
                   onClick={() => setCurrentView('home')}
-                  className="flex items-center space-x-1 text-xs text-slate-600 font-medium hover:text-slate-900"
+                  className="flex items-center space-x-1 text-xs text-slate-600 font-bold hover:text-slate-900"
                 >
                   <ArrowLeft className="w-4 h-4" />
-                  <span>Volver al aparcamiento</span>
+                  <span>Volver</span>
                 </button>
 
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center">
-                  <h2 className="text-base font-bold text-slate-900">
-                    {parkingBenefitType === 'time_extension' 
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 text-center">
+                  <span className="text-[10px] font-bold tracking-wider text-[#0066cc] uppercase bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                    Bonificación Comercial
+                  </span>
+                  <h2 className="text-base font-bold text-slate-900 mt-2">
+                    {selectedZone.municipality === 'Valle de Egüés' 
                       ? 'Validar compra (+30 min gratis)' 
-                      : `Canjear ticket Telpark (${telparkCost} € reembolsados)`}
+                      : 'Reembolsar ticket de Telpark'}
                   </h2>
-                  <p className="text-xs text-slate-600 mt-1">Escanea el código del mostrador del comercio local</p>
+                  <p className="text-xs text-slate-600 mt-1">
+                    Escanea el código QR que tiene el comercio en el mostrador tras tu compra
+                  </p>
 
-                  <div className="w-44 h-44 border-2 border-dashed border-blue-500 rounded-xl mx-auto my-4 flex items-center justify-center bg-white shadow-inner">
-                    <QrCode className="w-16 h-16 text-slate-400" />
+                  <div className="w-48 h-48 border-2 border-dashed border-[#0066cc] rounded-2xl mx-auto my-4 flex flex-col items-center justify-center bg-white shadow-inner">
+                    <QrCode className="w-20 h-20 text-slate-400 stroke-[1.5]" />
+                    <span className="text-[10px] font-mono text-slate-500 mt-2">Enfoca el código</span>
                   </div>
-                  <span className="text-[11px] text-slate-500 block">Enfoca el código del comercio en caja</span>
                 </div>
 
                 <div>
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-                    O selecciona el comercio para simular:
-                  </p>
+                  <p className="text-xs font-bold text-slate-700 mb-2">O simula escaneo en un comercio del barrio:</p>
                   <div className="space-y-2">
-                    {merchants.map(m => (
+                    {REAL_MERCHANTS.map(m => (
                       <button 
                         key={m.id}
-                        onClick={() => validateInStore(m)}
-                        className="w-full p-3 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 flex justify-between items-center text-left text-xs transition"
+                        onClick={() => handleValidatePurchase(m)}
+                        className="w-full p-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 flex justify-between items-center text-left text-xs transition shadow-sm"
                       >
-                        <div>
-                          <p className="font-bold text-slate-900">{m.name}</p>
-                          <p className="text-slate-500 text-[11px]">{m.address}</p>
+                        <div className="flex items-center space-x-3">
+                          <Store className="w-4 h-4 text-[#0066cc]" />
+                          <div>
+                            <p className="font-bold text-slate-900">{m.name}</p>
+                            <p className="text-slate-500 text-[11px]">{m.address}</p>
+                          </div>
                         </div>
-                        <span className="bg-blue-50 text-blue-700 font-bold px-2 py-1 rounded text-xs border border-blue-200">
-                          {parkingBenefitType === 'time_extension' ? '+30 min' : `-${telparkCost} €`}
+                        <span className="bg-blue-50 text-[#0066cc] font-bold px-2 py-1 rounded text-xs border border-blue-200">
+                          {selectedZone.municipality === 'Valle de Egüés' ? '+30 min' : 'Reembolsar'}
                         </span>
                       </button>
                     ))}
@@ -384,73 +436,58 @@ export default function App() {
               </div>
             )}
 
-            {/* SUB-VISTA: COMPROBANTE OFICIAL (ESTILO RECIBO TELPARK) */}
+            {/* PANTALLA: RECIBO / JUSTIFICANTE OFICIAL TELPARK */}
             {currentView === 'ticket' && (
               <div className="space-y-4">
                 <button 
                   onClick={() => setCurrentView('home')}
-                  className="flex items-center space-x-1 text-xs text-slate-600 font-medium hover:text-slate-900"
+                  className="flex items-center space-x-1 text-xs text-slate-600 font-bold hover:text-slate-900"
                 >
                   <ArrowLeft className="w-4 h-4" />
-                  <span>Volver</span>
+                  <span>Volver al tique</span>
                 </button>
 
                 <div className="bg-white border-2 border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
                   <div className="text-center pb-3 border-b border-slate-100">
                     <span className="text-[10px] font-bold tracking-wider text-slate-500 uppercase">
-                      Valle de Egüés · Estacionamiento Regulado
+                      {selectedZone.municipality} · Servicio ZEL
                     </span>
-                    <h2 className="text-lg font-bold text-slate-900 mt-1">Justificante Digital de Estacionamiento</h2>
+                    <h2 className="text-lg font-bold text-slate-900 mt-0.5">Recibo de Estacionamiento</h2>
+                    <p className="text-[11px] font-mono text-slate-500">Operación: {lastValidation?.verification_hash || 'TELP-981240'}</p>
                   </div>
 
                   <div className="space-y-2.5 text-xs">
                     <div className="flex justify-between py-1 border-b border-slate-100">
-                      <span className="text-slate-500">Matrícula:</span>
-                      <span className="font-mono font-bold text-slate-900 text-sm">{session?.license_plate || plate}</span>
+                      <span className="text-slate-500">Vehículo / Matrícula:</span>
+                      <span className="font-mono font-bold text-slate-900">{session?.license_plate || plate}</span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-slate-100">
-                      <span className="text-slate-500">Calle / Zona:</span>
-                      <span className="font-semibold text-slate-900">{session?.zone_name || selectedZone.name}</span>
+                      <span className="text-slate-500">Zona / Sector:</span>
+                      <span className="font-semibold text-slate-900 text-right">{session?.zone_name || selectedZone.name}</span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-slate-100">
-                      <span className="text-slate-500">Estado:</span>
+                      <span className="text-slate-500">Estado de Pago:</span>
                       <span className="font-bold text-green-700 bg-green-50 px-2 py-0.5 rounded border border-green-200">
-                        VÁLIDO · AUTORIZADO
+                        {session?.is_extended ? 'BONIFICADO POR COMERCIO' : 'AUTORIZADO'}
                       </span>
                     </div>
-
-                    {/* Beneficio aplicado */}
-                    {parkingBenefitType === 'time_extension' ? (
-                      <div className="flex justify-between py-1 border-b border-slate-100">
-                        <span className="text-slate-500">Tiempo total amparado:</span>
-                        <span className="font-bold text-slate-900">
-                          {session?.is_extended ? '60 minutos (Base 30m + 30m Comercio)' : '30 minutos (Base)'}
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="flex justify-between py-1 border-b border-slate-100 bg-green-50/60 p-1.5 rounded">
-                        <span className="text-green-800 font-semibold">Coste Telpark devuelto:</span>
-                        <span className="font-bold text-green-700 text-sm">+{telparkCost} € Reembolsado</span>
-                      </div>
-                    )}
-
                     {lastValidation && (
-                      <div className="flex justify-between py-1 border-b border-slate-100 text-blue-900 bg-blue-50/50 px-1 rounded">
-                        <span className="text-blue-700 font-medium">Financiado por comercio:</span>
+                      <div className="flex justify-between py-1.5 border-b border-slate-100 bg-blue-50/70 p-2 rounded text-blue-900">
+                        <span className="font-medium">Comercio Bonificador:</span>
                         <span className="font-bold">{lastValidation.merchant_name}</span>
                       </div>
                     )}
-                    <div className="flex justify-between py-1">
-                      <span className="text-slate-500">Código de control oficial:</span>
-                      <span className="font-mono text-[11px] text-slate-600">
-                        {lastValidation?.verification_hash || 'CPK-9284F'}
+                    <div className="flex justify-between py-1 border-b border-slate-100">
+                      <span className="text-slate-500">Hora de expiración:</span>
+                      <span className="font-mono font-bold text-slate-900">
+                        {session ? new Date(session.expires_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '14:15 h'}
                       </span>
                     </div>
                   </div>
 
-                  <div className="pt-2 text-center text-[11px] text-slate-500 border-t border-slate-100 flex items-center justify-center space-x-1">
-                    <ShieldCheck className="w-4 h-4 text-blue-600" />
-                    <span>Verificable por la Policía Municipal en tiempo real</span>
+                  <div className="pt-2 text-center text-[11px] text-slate-500 border-t border-slate-100 flex items-center justify-center space-x-1.5">
+                    <ShieldCheck className="w-4 h-4 text-[#0066cc]" />
+                    <span>Control automático por lector de matrícula (LPR)</span>
                   </div>
                 </div>
 
@@ -458,178 +495,192 @@ export default function App() {
                   onClick={() => setCurrentView('home')}
                   className="w-full py-3 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition"
                 >
-                  Cerrar Justificante
+                  Cerrar
                 </button>
               </div>
             )}
 
-            {/* SUB-VISTA: PANTALLA PRINCIPAL (PARKING) */}
+            {/* PANTALLA PRINCIPAL: TICKETING ESTILO TELPARK */}
             {currentView === 'home' && (
               <div className="space-y-4">
                 
-                {/* SI HAY SESIÓN ACTIVA: RELOJ LIMPIO TIPO TELPARK */}
+                {/* ESTADO 1: HAY ESTACIONAMIENTO ACTIVO (TIQUE EN CURSO) */}
                 {session ? (
-                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 text-center space-y-4 shadow-sm">
+                  <div className="bg-white border-2 border-slate-200 rounded-2xl p-6 text-center space-y-4 shadow-sm">
                     <div className="space-y-0.5">
-                      <span className="text-[11px] font-bold text-blue-600 uppercase tracking-wider">
-                        Estacionamiento en curso
+                      <span className="text-[11px] font-bold text-[#0066cc] uppercase tracking-wider">
+                        Tique Activo en Curso
                       </span>
-                      <h2 className="text-lg font-bold text-slate-900">{session.zone_name}</h2>
-                      <p className="text-xs text-slate-500">Matrícula: <strong className="font-mono">{session.license_plate}</strong></p>
+                      <h2 className="text-base font-bold text-slate-900">{session.zone_name}</h2>
+                      <p className="text-xs text-slate-500">Matrícula: <strong className="font-mono text-slate-800">{session.license_plate}</strong></p>
                     </div>
 
-                    {/* Contador numérico gigante y claro */}
-                    <div className="py-2">
-                      <span className={`text-5xl font-mono font-bold tracking-tight ${
+                    {/* Tiempo gigante limpio */}
+                    <div className="py-3 bg-slate-50 rounded-2xl border border-slate-200">
+                      <span className={`text-5xl font-mono font-black tracking-tight ${
                         secondsRemaining < 600 ? 'text-amber-600 animate-pulse' : 'text-slate-900'
                       }`}>
-                        {formatTime(secondsRemaining)}
+                        {formatTimerDigits(secondsRemaining)}
                       </span>
-                      <span className="block text-xs text-slate-500 mt-1">Tiempo restante</span>
+                      <span className="block text-xs text-slate-500 mt-1 font-medium">
+                        Hasta las {new Date(session.expires_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} h
+                      </span>
                     </div>
 
-                    {/* Banner de beneficio (Ampliación o Reembolso) */}
+                    {/* Estado de bonificación */}
                     {session.is_extended ? (
-                      <div className="bg-green-50 border border-green-200 text-green-800 p-2.5 rounded-lg text-xs font-medium flex items-center justify-center space-x-1.5">
-                        <CheckCircle2 className="w-4 h-4 text-green-600" />
-                        <span><strong>+30 min sumados</strong> por compra en {lastValidation?.merchant_name}</span>
-                      </div>
-                    ) : refundApplied ? (
-                      <div className="bg-green-50 border border-green-200 text-green-800 p-2.5 rounded-lg text-xs font-medium flex items-center justify-center space-x-1.5">
-                        <DollarSign className="w-4 h-4 text-green-600" />
-                        <span><strong>Ticket de {telparkCost} € pagado</strong> por {lastValidation?.merchant_name}</span>
+                      <div className="bg-green-50 border border-green-200 text-green-800 p-3 rounded-xl text-xs font-medium flex items-center justify-center space-x-1.5">
+                        <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0" />
+                        <span>
+                          {selectedZone.municipality === 'Valle de Egüés'
+                            ? `+30 min gratis sumados por ${lastValidation?.merchant_name}`
+                            : `Ticket reembolsado en caja por ${lastValidation?.merchant_name}`}
+                        </span>
                       </div>
                     ) : (
-                      <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg text-left text-xs flex justify-between items-center">
+                      <div className="bg-blue-50 border border-blue-200 p-3 rounded-xl text-left text-xs flex justify-between items-center">
                         <div>
-                          <p className="font-bold text-blue-950">
-                            {parkingBenefitType === 'time_extension' ? '¿Necesitas más tiempo?' : '¿Quieres que te paguen el parking?'}
-                          </p>
-                          <p className="text-blue-800 text-[11px]">
-                            {parkingBenefitType === 'time_extension' 
-                              ? 'Compra en cualquier tienda y suma +30 min.'
-                              : `Compra en el comercio local y te abonan los ${telparkCost} €.`}
+                          <p className="font-bold text-[#004080]">¿Compras en el comercio local?</p>
+                          <p className="text-[#0066cc] text-[11px]">
+                            {selectedZone.municipality === 'Valle de Egüés'
+                              ? 'Escanea en caja y te regalamos +30 min.'
+                              : 'Escanea en caja y te devuelven el ticket.'}
                           </p>
                         </div>
                         <button 
                           onClick={() => setCurrentView('scanner')}
-                          className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-1.5 rounded-md text-xs transition"
+                          className="bg-[#0066cc] hover:bg-[#0052a3] text-white font-bold px-3 py-1.5 rounded-lg text-xs transition shadow-sm"
                         >
-                          Validar
+                          Escanear
                         </button>
                       </div>
                     )}
 
-                    {/* Botones de acción */}
+                    {/* Acciones */}
                     <div className="space-y-2 pt-1">
                       <button 
                         onClick={() => setCurrentView('ticket')}
-                        className="w-full py-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1.5"
+                        className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1.5"
                       >
-                        <Receipt className="w-4 h-4 text-slate-600" />
-                        <span>Ver justificante de estacionamiento</span>
+                        <ShieldCheck className="w-4 h-4 text-[#0066cc]" />
+                        <span>Ver recibo oficial del tique</span>
                       </button>
 
                       <button 
-                        onClick={() => { setSession(null); setLastValidation(null); setRefundApplied(false); }}
-                        className="w-full py-2 text-xs text-red-600 hover:text-red-700 font-medium transition"
+                        onClick={() => { setSession(null); setLastValidation(null); }}
+                        className="w-full py-2 text-xs text-red-600 hover:text-red-700 font-bold transition"
                       >
-                        Finalizar estacionamiento
+                        Finalizar tique
                       </button>
                     </div>
                   </div>
                 ) : (
-                  /* SI NO HAY SESIÓN ACTIVA: SELECTOR SIMPLE DE CALLE (TIPO TELPARK) */
+                  /* ESTADO 2: SELECCIONAR ZONA Y TIEMPO (TIPO TELPARK DIAL) */
                   <div className="space-y-4">
                     
-                    {/* Caja de Telpark Refund si está activo */}
-                    {parkingBenefitType === 'ticket_reimbursement' && (
-                      <div className="p-4 rounded-xl border border-blue-200 bg-blue-50/60 text-xs space-y-2">
-                        <div className="flex justify-between items-center">
-                          <span className="font-bold text-blue-950">Coste de tu ticket Telpark / Zona Azul:</span>
-                          <div className="flex items-center space-x-1">
-                            <input 
-                              type="number" 
-                              step="0.10"
-                              value={telparkCost}
-                              onChange={(e) => setTelparkCost(e.target.value)}
-                              className="w-16 p-1 border border-blue-300 rounded font-bold text-center bg-white text-slate-900"
-                            />
-                            <span className="font-bold text-slate-700">€</span>
-                          </div>
-                        </div>
-                        <p className="text-[11px] text-blue-800">
-                          Al comprar en cualquier comercio asociado, el tendero te descuenta estos {telparkCost} € de tu compra al escanear el QR.
-                        </p>
-                      </div>
-                    )}
-
-                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-4 shadow-sm">
-                      <div className="flex items-center space-x-2 text-slate-700 text-xs font-medium">
-                        <MapPin className="w-4 h-4 text-blue-600" />
-                        <span>Ubicación actual detectada: <strong>Sarriguren</strong></span>
+                    {/* Selector de Calle / Sector */}
+                    <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3 shadow-sm">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-bold text-slate-800">Zona / Calle seleccionada:</span>
+                        <span className="text-[11px] font-bold text-[#0066cc] bg-blue-50 px-2 py-0.5 rounded">
+                          {selectedZone.code}
+                        </span>
                       </div>
 
-                      <div>
-                        <label className="text-xs font-bold text-slate-800 block mb-1.5">
-                          Selecciona la calle donde vas a aparcar:
-                        </label>
-                        <div className="space-y-2">
-                          {zones.map((z) => (
-                            <div 
-                              key={z.id}
-                              onClick={() => setSelectedZone(z)}
-                              className={`p-3 rounded-xl border text-xs cursor-pointer transition flex justify-between items-center ${
-                                selectedZone.id === z.id 
-                                  ? 'border-blue-600 bg-blue-50/50 shadow-sm' 
-                                  : 'border-slate-200 bg-white hover:border-slate-300'
-                              }`}
-                            >
-                              <div>
-                                <p className="font-bold text-slate-900">{z.name}</p>
-                                <p className="text-[11px] text-slate-500 mt-0.5">{z.schedule_info}</p>
-                              </div>
-                              <div className="text-right">
-                                <span className="font-bold text-blue-600 text-xs block">{z.base_minutes} min</span>
-                                <span className="text-[10px] text-slate-500">Gratuito</span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Botón Principal de Iniciar */}
-                      <button 
-                        onClick={() => startParking(selectedZone)}
-                        className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm shadow-md transition"
+                      <select 
+                        value={selectedZone.id}
+                        onChange={(e) => {
+                          const z = REAL_ZONES.find(item => item.id === e.target.value);
+                          if (z) setSelectedZone(z);
+                        }}
+                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs text-slate-900 outline-none cursor-pointer"
                       >
-                        Aparcar ahora en {selectedZone.name}
+                        {cityZones.map(z => (
+                          <option key={z.id} value={z.id}>{z.name}</option>
+                        ))}
+                      </select>
+
+                      <p className="text-[11px] text-slate-500">{selectedZone.schedule_info}</p>
+                    </div>
+
+                    {/* SELECTOR DE TIEMPO INTERACTIVO (TELPARK STYLE) */}
+                    <div className="bg-white border border-slate-200 rounded-2xl p-5 text-center space-y-4 shadow-sm">
+                      <span className="text-xs font-bold text-slate-700 block">
+                        Duración del estacionamiento:
+                      </span>
+
+                      {/* Stepper de minutos */}
+                      <div className="flex items-center justify-center space-x-5 py-2">
+                        <button 
+                          onClick={() => setSelectedMinutes(prev => Math.max(30, prev - 30))}
+                          disabled={selectedZone.municipality === 'Valle de Egüés' || selectedMinutes <= 30}
+                          className="w-10 h-10 rounded-full border border-slate-300 flex items-center justify-center text-slate-700 hover:bg-slate-100 disabled:opacity-30 disabled:pointer-events-none transition"
+                        >
+                          <Minus className="w-5 h-5" />
+                        </button>
+
+                        <div className="w-32">
+                          <span className="text-3xl font-black text-slate-900 font-mono block">
+                            {selectedMinutes} min
+                          </span>
+                          <span className="text-[11px] text-slate-500 font-medium">
+                            Hasta las {calculateExpiryTime(selectedMinutes)} h
+                          </span>
+                        </div>
+
+                        <button 
+                          onClick={() => setSelectedMinutes(prev => Math.min(120, prev + 30))}
+                          disabled={selectedZone.municipality === 'Valle de Egüés' || selectedMinutes >= 120}
+                          className="w-10 h-10 rounded-full border border-slate-300 flex items-center justify-center text-slate-700 hover:bg-slate-100 disabled:opacity-30 disabled:pointer-events-none transition"
+                        >
+                          <Plus className="w-5 h-5" />
+                        </button>
+                      </div>
+
+                      {/* Desglose de importe */}
+                      <div className="pt-3 border-t border-slate-100 flex justify-between items-center text-xs">
+                        <span className="text-slate-500">Importe a pagar:</span>
+                        <span className="text-xl font-black text-[#0066cc] font-mono">
+                          {calculatePrice()}
+                        </span>
+                      </div>
+
+                      {/* Botón Iniciar */}
+                      <button 
+                        onClick={startParking}
+                        className="w-full py-4 bg-[#0066cc] hover:bg-[#0052a3] text-white rounded-xl font-bold text-sm shadow-md transition transform active:scale-98"
+                      >
+                        Iniciar Estacionamiento
                       </button>
                     </div>
 
-                    {/* Explicación simple y humana */}
-                    <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-2 text-xs">
-                      <p className="font-bold text-slate-900">¿Cómo funciona la bonificación de aparcamiento?</p>
-                      <ul className="text-slate-600 space-y-1 text-[11px] list-disc list-inside">
-                        <li>En <strong>Zona Rosa de Sarriguren</strong>: Tienes 30 min gratis y sumas otros 30 min gratis al comprar en una tienda local.</li>
-                        <li>En <strong>Zona de Pago Telpark</strong>: El comercio te reembolsa el ticket de aparcamiento directamente en tu compra.</li>
-                        <li>Cero papel: sincronizado con la Policía Municipal y el Ayuntamiento.</li>
-                      </ul>
+                    {/* BANNER COMPARK INTEGRADO (SIN MARKETING CURSI) */}
+                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl p-4 text-xs space-y-1.5 shadow-sm">
+                      <div className="flex items-center space-x-1.5 text-[#004080] font-bold">
+                        <Sparkles className="w-4 h-4 text-[#0066cc]" />
+                        <span>Bonificación con el Comercio Local</span>
+                      </div>
+                      <p className="text-slate-600 text-[11px] leading-relaxed">
+                        {selectedZone.municipality === 'Valle de Egüés' 
+                          ? 'En Sarriguren el aparcamiento es gratuito (30 min). Al comprar en cualquier comercio de la avenida, escanea su código QR y te amplían el tique a 60 min.'
+                          : 'En Pamplona (Zona Azul), si realizas una compra en los comercios locales adheridos, te abonan el importe del tique (1,20 €) directamente en caja.'}
+                      </p>
                     </div>
 
-                    {/* Comercios adheridos */}
+                    {/* Comercios adheridos cercanos */}
                     <div>
-                      <p className="text-xs font-bold text-slate-700 mb-2">Comercios adheridos que te pagan el parking:</p>
+                      <p className="text-xs font-bold text-slate-700 mb-2">Comercios adheridos en {selectedCity}:</p>
                       <div className="grid grid-cols-2 gap-2 text-xs">
-                        {merchants.map(m => (
-                          <div key={m.id} className="p-2.5 rounded-lg border border-slate-200 bg-white">
-                            <span className="text-[10px] text-blue-600 font-semibold">{m.category}</span>
-                            <p className="font-bold text-slate-900 text-xs mt-0.5">{m.name}</p>
-                            <p className="text-[10px] text-slate-500 truncate">{m.address}</p>
+                        {REAL_MERCHANTS.filter(m => selectedCity === 'Valle de Egüés' ? m.address.includes('Sarriguren') : m.address.includes('Pamplona') || m.address.includes('Ensanche')).map(m => (
+                          <div key={m.id} className="p-2.5 rounded-xl border border-slate-200 bg-white shadow-sm">
+                            <span className="text-[10px] text-[#0066cc] font-semibold">{m.category}</span>
+                            <p className="font-bold text-slate-900 text-xs mt-0.5 truncate">{m.name}</p>
+                            <p className="text-[10px] text-slate-500 truncate">{m.address.split('(')[0]}</p>
                           </div>
                         ))}
                       </div>
                     </div>
+
                   </div>
                 )}
 
@@ -639,76 +690,63 @@ export default function App() {
           </main>
         )}
 
-        {/* ========================================================= */}
-        {/* VISTA 2: COMERCIO (TÓTEM QR SIMPLE)                      */}
-        {/* ========================================================= */}
+        {/* ============================================================== */}
+        {/* VISTA 2: COMERCIO (TÓTEM QR EN MOSTRADOR)                      */}
+        {/* ============================================================== */}
         {appRole === 'merchant' && (
           <main className="flex-1 p-5 space-y-4">
-            <div className="text-center space-y-1">
-              <span className="text-[10px] font-bold uppercase text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+            <div className="text-center space-y-0.5">
+              <span className="text-[10px] font-bold uppercase text-[#0066cc] bg-blue-50 px-2.5 py-0.5 rounded border border-blue-200">
                 Punto de Venta Oficial
               </span>
-              <h2 className="text-lg font-bold text-slate-900">Tótem de Validación en Mostrador</h2>
+              <h2 className="text-base font-bold text-slate-900 mt-1">Tótem QR de Mostrador</h2>
               <p className="text-xs text-slate-500">Muestra este código al cliente tras su compra</p>
             </div>
 
-            <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 text-xs">
-              <label className="text-slate-600 font-semibold block mb-1">Comercio actual:</label>
-              <select 
-                value={selectedMerchant.id}
-                onChange={(e) => {
-                  const m = merchants.find(item => item.id === e.target.value);
-                  if (m) setSelectedMerchant(m);
-                }}
-                className="w-full p-2 bg-white border border-slate-300 rounded font-bold text-slate-900"
-              >
-                {merchants.map(m => (
-                  <option key={m.id} value={m.id}>{m.name} ({m.category})</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="bg-white border-2 border-slate-200 rounded-2xl p-6 text-center space-y-3 shadow-sm">
-              <h3 className="font-bold text-slate-900 text-base">{selectedMerchant.name}</h3>
-              <p className="text-xs text-blue-600 font-medium">Validación +30 Minutos o Reembolso Telpark</p>
-
-              <div className="w-52 h-52 bg-slate-50 p-4 border border-slate-200 rounded-xl mx-auto flex flex-col items-center justify-center">
-                <QrCode className="w-40 h-40 text-slate-900" />
+            <div className="bg-white border-2 border-slate-200 rounded-2xl p-6 text-center space-y-4 shadow-sm">
+              <div>
+                <h3 className="font-bold text-slate-900 text-base">Panadería & Café Sarriguren</h3>
+                <p className="text-xs text-[#0066cc] font-semibold mt-0.5">Bonificación de Aparcamiento</p>
               </div>
 
-              <p className="text-xs text-slate-500">
-                El cliente escanea este código desde la app Compark para ampliar su estacionamiento o descontar su ticket de Telpark.
+              <div className="w-52 h-52 bg-slate-50 p-4 border border-slate-200 rounded-2xl mx-auto flex flex-col items-center justify-center shadow-inner">
+                <QrCode className="w-40 h-40 text-slate-900 stroke-[1.5]" />
+                <span className="text-[9px] font-mono text-slate-600 font-bold mt-1">TOKEN: PANADERIA-SARRI-01</span>
+              </div>
+
+              <p className="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                El cliente escanea este código con su app Compark/Telpark para sumar +30 min en Sarriguren o reembolsar el ticket en Pamplona.
               </p>
             </div>
           </main>
         )}
 
-        {/* ========================================================= */}
-        {/* VISTA 3: POLICÍA / TELPARK (INSPECTOR SIMPLE)            */}
-        {/* ========================================================= */}
+        {/* ============================================================== */}
+        {/* VISTA 3: POLICÍA / TELPARK (INSPECTOR DE MATRÍCULAS LPR)       */}
+        {/* ============================================================== */}
         {appRole === 'police' && (
           <main className="flex-1 p-5 space-y-4">
-            <div className="text-center space-y-1">
+            <div className="text-center space-y-0.5">
               <span className="text-[10px] font-bold uppercase text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                Control Municipal
+                Control Municipal de Tráfico
               </span>
-              <h2 className="text-lg font-bold text-slate-900">Inspección de Matrícula</h2>
-              <p className="text-xs text-slate-500">Comprueba si un vehículo tiene tiempo ampliado por compra</p>
+              <h2 className="text-base font-bold text-slate-900 mt-1">Inspección de Matrículas</h2>
+              <p className="text-xs text-slate-500">Consulta si un vehículo está amparado por compra local</p>
             </div>
 
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-3 shadow-sm">
               <label className="text-xs font-bold text-slate-800 block">Matrícula a consultar:</label>
               <div className="flex space-x-2">
                 <input 
                   type="text" 
-                  placeholder="Ej: 7842 MKL"
+                  placeholder="7842 MKL"
                   value={policePlate}
                   onChange={(e) => setPolicePlate(e.target.value.toUpperCase())}
-                  className="flex-1 p-3 border border-slate-300 rounded-lg font-mono font-bold text-slate-900 uppercase text-center"
+                  className="flex-1 p-3 bg-slate-50 border border-slate-300 rounded-xl font-mono font-black text-slate-900 uppercase text-center text-sm"
                 />
                 <button 
                   onClick={handlePoliceCheck}
-                  className="px-4 bg-blue-600 text-white rounded-lg font-bold text-xs"
+                  className="px-4 bg-[#0066cc] text-white rounded-xl font-bold text-xs hover:bg-[#0052a3] transition"
                 >
                   <Search className="w-4 h-4" />
                 </button>
@@ -717,7 +755,7 @@ export default function App() {
               <div className="flex space-x-2">
                 <button 
                   onClick={() => setPolicePlate('7842 MKL')}
-                  className="text-[11px] text-blue-600 underline font-mono"
+                  className="text-[11px] text-[#0066cc] underline font-mono"
                 >
                   Probar 7842 MKL
                 </button>
@@ -725,13 +763,13 @@ export default function App() {
             </div>
 
             {policeResult && (
-              <div className="bg-white border-2 border-slate-200 rounded-xl p-4 space-y-2 text-xs shadow-sm">
+              <div className="bg-white border-2 border-slate-200 rounded-2xl p-4 space-y-2.5 text-xs shadow-sm">
                 <div className="flex justify-between items-center border-b border-slate-100 pb-2">
-                  <span className="font-mono font-bold text-base text-slate-900">{policeResult.plate}</span>
+                  <span className="font-mono font-black text-base text-slate-900">{policeResult.plate}</span>
                   {policeResult.authorized ? (
                     <span className="bg-green-50 text-green-700 font-bold px-2 py-0.5 rounded border border-green-200 flex items-center space-x-1">
                       <Check className="w-3.5 h-3.5" />
-                      <span>NO MULTAR</span>
+                      <span>NO SANCIONAR</span>
                     </span>
                   ) : (
                     <span className="bg-red-50 text-red-700 font-bold px-2 py-0.5 rounded border border-red-200 flex items-center space-x-1">
@@ -741,89 +779,14 @@ export default function App() {
                   )}
                 </div>
 
-                <div className="space-y-1 text-slate-600">
-                  <p>Estado: <strong className="text-slate-900">Autorizado (+30 min por compra local)</strong></p>
-                  <p>Comercio: <strong className="text-slate-900">{policeResult.merchant}</strong></p>
-                  <p>Tiempo restante: <strong className="text-blue-700 font-mono">{policeResult.minutes} min</strong></p>
+                <div className="space-y-1.5 text-slate-600">
+                  <p>Estado: <strong className="text-slate-900">Amparado por Comercio Local</strong></p>
+                  <p>Comercio validador: <strong className="text-slate-900">{policeResult.merchant}</strong></p>
+                  <p>Tiempo restante de amparo: <strong className="text-[#0066cc] font-mono">{policeResult.minutes} min</strong></p>
                   <p>Ubicación: <strong className="text-slate-900">{policeResult.zone}</strong></p>
                 </div>
               </div>
             )}
-          </main>
-        )}
-
-        {/* ========================================================= */}
-        {/* VISTA 4: PANEL DEL AYUNTAMIENTO (SMART CITY DASHBOARD)   */}
-        {/* ========================================================= */}
-        {appRole === 'council' && (
-          <main className="flex-1 p-5 space-y-4">
-            <div className="text-center space-y-1">
-              <span className="text-[10px] font-bold uppercase text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                Área de Movilidad y Comercio
-              </span>
-              <h2 className="text-lg font-bold text-slate-900">Ayuntamiento del Valle de Egüés</h2>
-              <p className="text-xs text-slate-500">Telemetría de rotación de plazas y comercio de proximidad</p>
-            </div>
-
-            {/* KPI Cards */}
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                <span className="text-[11px] text-slate-500 block">Vehículos rotados hoy</span>
-                <span className="text-2xl font-bold text-slate-900 mt-0.5 block">418</span>
-                <span className="text-[10px] text-emerald-600 font-semibold">+24% vs semana previa</span>
-              </div>
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                <span className="text-[11px] text-slate-500 block">Tickets bonificados</span>
-                <span className="text-2xl font-bold text-blue-600 mt-0.5 block">182</span>
-                <span className="text-[10px] text-slate-500">18,40 € ticket medio</span>
-              </div>
-            </div>
-
-            {/* Ocupación por calle */}
-            <div className="p-4 bg-white border border-slate-200 rounded-xl space-y-3 text-xs shadow-sm">
-              <h3 className="font-bold text-slate-900 uppercase text-[11px] tracking-wider">
-                Ocupación de Zona Rosa en Tiempo Real
-              </h3>
-
-              <div className="space-y-2.5">
-                <div>
-                  <div className="flex justify-between text-[11px] mb-1">
-                    <span className="text-slate-700">Av. Reino de Navarra (Zona Comercial)</span>
-                    <span className="font-bold text-amber-600">68% ocupación</span>
-                  </div>
-                  <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                    <div className="bg-amber-500 h-full w-[68%] rounded-full"></div>
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex justify-between text-[11px] mb-1">
-                    <span className="text-slate-700">Av. Erripagaña</span>
-                    <span className="font-bold text-green-600">42% ocupación</span>
-                  </div>
-                  <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                    <div className="bg-green-500 h-full w-[42%] rounded-full"></div>
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex justify-between text-[11px] mb-1">
-                    <span className="text-slate-700">Centro de Salud / Servicios</span>
-                    <span className="font-bold text-red-600">89% ocupación</span>
-                  </div>
-                  <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                    <div className="bg-red-500 h-full w-[89%] rounded-full"></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900 space-y-1">
-              <p className="font-bold">Retorno de inversión para el Valle:</p>
-              <p className="text-[11px] text-blue-800">
-                Por cada 1 € de aparcamiento bonificado se han generado 14 € de facturación directa en las tiendas del municipio.
-              </p>
-            </div>
           </main>
         )}
 
