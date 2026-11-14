@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { 
   Car, MapPin, QrCode, ShieldCheck, 
-  CheckCircle2, 
-  Search, Check, AlertCircle, ArrowLeft, Receipt
+  CheckCircle2, Search, Check, AlertCircle, ArrowLeft, Receipt,
+  Wallet, DollarSign
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { supabase } from './lib/supabase';
@@ -47,7 +47,7 @@ const DEFAULT_ZONES: ParkingZone[] = [
 const DEFAULT_MERCHANTS: Merchant[] = [
   {
     id: 'm-1',
-    name: 'Panadería Sarriguren',
+    name: 'Panadería & Café Sarriguren',
     category: 'Alimentación',
     address: 'Av. Reino de Navarra, 8',
     lat: 42.8122,
@@ -57,7 +57,7 @@ const DEFAULT_MERCHANTS: Merchant[] = [
   },
   {
     id: 'm-2',
-    name: 'Farmacia Egüés',
+    name: 'Farmacia Egüés 24h',
     category: 'Salud',
     address: 'Av. Reino de Navarra, 16',
     lat: 42.8135,
@@ -88,8 +88,13 @@ const DEFAULT_MERCHANTS: Merchant[] = [
 ];
 
 export default function App() {
-  const [appRole, setAppRole] = useState<'driver' | 'merchant' | 'police'>('driver');
+  // Roles: Driver (Mobile), Merchant (Totem), Police (Inspector), Council (Smart City Dashboard)
+  const [appRole, setAppRole] = useState<'driver' | 'merchant' | 'police' | 'council'>('driver');
   const [currentView, setCurrentView] = useState<'home' | 'scanner' | 'ticket'>('home');
+
+  // Mode: Free Zona Rosa vs Telpark Ticket Reimbursement
+  const [parkingBenefitType, setParkingBenefitType] = useState<'time_extension' | 'ticket_reimbursement'>('time_extension');
+  const [telparkCost, setTelparkCost] = useState('1.40');
 
   const [plate, setPlate] = useState('7842 MKL');
   const [isEditingPlate, setIsEditingPlate] = useState(false);
@@ -103,6 +108,7 @@ export default function App() {
   const [session, setSession] = useState<ParkingSession | null>(null);
   const [secondsRemaining, setSecondsRemaining] = useState<number>(0);
   const [lastValidation, setLastValidation] = useState<ValidationRecord | null>(null);
+  const [refundApplied, setRefundApplied] = useState(false);
 
   const [policePlate, setPolicePlate] = useState('');
   const [policeResult, setPoliceResult] = useState<any>(null);
@@ -145,31 +151,39 @@ export default function App() {
 
     setSession(newSession);
     setSecondsRemaining(mins * 60);
+    setRefundApplied(false);
     setCurrentView('home');
   };
 
   const validateInStore = (m: Merchant) => {
     if (!session) return;
-    const extra = 30 * 60;
-    setSecondsRemaining(prev => prev + extra);
-    setSession({
-      ...session,
-      is_extended: true,
-      status: 'extended',
-      expires_at: new Date(new Date(session.expires_at).getTime() + extra * 1000).toISOString()
-    });
+
+    if (parkingBenefitType === 'time_extension') {
+      // Extiende 30 min
+      const extra = 30 * 60;
+      setSecondsRemaining(prev => prev + extra);
+      setSession({
+        ...session,
+        is_extended: true,
+        status: 'extended',
+        expires_at: new Date(new Date(session.expires_at).getTime() + extra * 1000).toISOString()
+      });
+    } else {
+      // Reembolso del ticket de Telpark
+      setRefundApplied(true);
+    }
 
     setLastValidation({
       id: 'val-' + Math.random().toString(36).substring(2, 9),
       session_id: session.id,
       merchant_id: m.id,
       merchant_name: m.name,
-      minutes_added: 30,
+      minutes_added: parkingBenefitType === 'time_extension' ? 30 : 0,
       validated_at: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       verification_hash: 'CPK-' + Math.random().toString(36).substring(2, 8).toUpperCase()
     });
 
-    confetti({ particleCount: 70, spread: 60, origin: { y: 0.7 } });
+    confetti({ particleCount: 75, spread: 65, origin: { y: 0.65 } });
     setCurrentView('ticket');
   };
 
@@ -182,15 +196,17 @@ export default function App() {
         authorized: secondsRemaining > 0,
         minutes: Math.ceil(secondsRemaining / 60),
         merchant: lastValidation?.merchant_name,
-        zone: session.zone_name
+        zone: session.zone_name,
+        isRefunded: refundApplied
       });
     } else {
       setPoliceResult({
         plate: p,
         authorized: true,
-        minutes: 38,
+        minutes: 42,
         merchant: 'Panadería Sarriguren',
-        zone: 'Avda. Reino de Navarra'
+        zone: 'Avda. Reino de Navarra',
+        isRefunded: true
       });
     }
   };
@@ -205,13 +221,13 @@ export default function App() {
     <div className="flex justify-center min-h-screen bg-slate-100 text-slate-800 font-sans">
       <div className="w-full max-w-md min-h-screen bg-white flex flex-col shadow-lg border-x border-slate-200">
         
-        {/* Top Minimal Role Switcher (para la demo) */}
+        {/* Top Minimal Role Switcher (para la demo ante el jurado) */}
         <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 flex justify-between items-center text-xs">
-          <span className="text-slate-500 font-medium text-[11px]">Modo:</span>
+          <span className="text-slate-500 font-medium text-[11px]">Vista:</span>
           <div className="flex space-x-1">
             <button 
               onClick={() => { setAppRole('driver'); setCurrentView('home'); }}
-              className={`px-3 py-1 rounded text-xs font-semibold ${
+              className={`px-2.5 py-1 rounded text-xs font-semibold ${
                 appRole === 'driver' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-200'
               }`}
             >
@@ -219,7 +235,7 @@ export default function App() {
             </button>
             <button 
               onClick={() => setAppRole('merchant')}
-              className={`px-3 py-1 rounded text-xs font-semibold ${
+              className={`px-2.5 py-1 rounded text-xs font-semibold ${
                 appRole === 'merchant' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-200'
               }`}
             >
@@ -227,11 +243,19 @@ export default function App() {
             </button>
             <button 
               onClick={() => setAppRole('police')}
-              className={`px-3 py-1 rounded text-xs font-semibold ${
+              className={`px-2.5 py-1 rounded text-xs font-semibold ${
                 appRole === 'police' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-200'
               }`}
             >
               Policía
+            </button>
+            <button 
+              onClick={() => setAppRole('council')}
+              className={`px-2.5 py-1 rounded text-xs font-semibold ${
+                appRole === 'council' ? 'bg-emerald-600 text-white' : 'text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              Ayto
             </button>
           </div>
         </div>
@@ -284,6 +308,31 @@ export default function App() {
         {/* ========================================================= */}
         {appRole === 'driver' && (
           <main className="flex-1 p-5 space-y-4">
+
+            {/* Selector de Modalidad: Sarriguren Zona Rosa vs Devolución Telpark */}
+            <div className="bg-slate-100 p-1 rounded-xl flex text-xs font-bold">
+              <button 
+                onClick={() => setParkingBenefitType('time_extension')}
+                className={`flex-1 py-2 rounded-lg transition ${
+                  parkingBenefitType === 'time_extension' 
+                    ? 'bg-white text-slate-900 shadow-sm' 
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                Zona Rosa (+30m gratis)
+              </button>
+              <button 
+                onClick={() => setParkingBenefitType('ticket_reimbursement')}
+                className={`flex-1 py-2 rounded-lg transition flex items-center justify-center space-x-1 ${
+                  parkingBenefitType === 'ticket_reimbursement' 
+                    ? 'bg-white text-blue-700 shadow-sm' 
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <Wallet className="w-3.5 h-3.5 text-blue-600" />
+                <span>Te pagan Telpark</span>
+              </button>
+            </div>
             
             {/* SUB-VISTA: ESCÁNER / VALIDACIÓN */}
             {currentView === 'scanner' && (
@@ -293,17 +342,21 @@ export default function App() {
                   className="flex items-center space-x-1 text-xs text-slate-600 font-medium hover:text-slate-900"
                 >
                   <ArrowLeft className="w-4 h-4" />
-                  <span>Volver al estacionamiento</span>
+                  <span>Volver al aparcamiento</span>
                 </button>
 
                 <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center">
-                  <h2 className="text-base font-bold text-slate-900">Validar compra en comercio local</h2>
-                  <p className="text-xs text-slate-600 mt-1">Escanea el código del mostrador para sumar +30 minutos</p>
+                  <h2 className="text-base font-bold text-slate-900">
+                    {parkingBenefitType === 'time_extension' 
+                      ? 'Validar compra (+30 min gratis)' 
+                      : `Canjear ticket Telpark (${telparkCost} € reembolsados)`}
+                  </h2>
+                  <p className="text-xs text-slate-600 mt-1">Escanea el código del mostrador del comercio local</p>
 
-                  <div className="w-44 h-44 border-2 border-dashed border-blue-500 rounded-xl mx-auto my-4 flex items-center justify-center bg-white">
+                  <div className="w-44 h-44 border-2 border-dashed border-blue-500 rounded-xl mx-auto my-4 flex items-center justify-center bg-white shadow-inner">
                     <QrCode className="w-16 h-16 text-slate-400" />
                   </div>
-                  <span className="text-[11px] text-slate-500 block">Enfoca el código del comercio</span>
+                  <span className="text-[11px] text-slate-500 block">Enfoca el código del comercio en caja</span>
                 </div>
 
                 <div>
@@ -322,7 +375,7 @@ export default function App() {
                           <p className="text-slate-500 text-[11px]">{m.address}</p>
                         </div>
                         <span className="bg-blue-50 text-blue-700 font-bold px-2 py-1 rounded text-xs border border-blue-200">
-                          +30 min
+                          {parkingBenefitType === 'time_extension' ? '+30 min' : `-${telparkCost} €`}
                         </span>
                       </button>
                     ))}
@@ -365,20 +418,30 @@ export default function App() {
                         VÁLIDO · AUTORIZADO
                       </span>
                     </div>
-                    <div className="flex justify-between py-1 border-b border-slate-100">
-                      <span className="text-slate-500">Tiempo total amparado:</span>
-                      <span className="font-bold text-slate-900">
-                        {session?.is_extended ? '60 minutos (Base 30m + 30m Comercio)' : '30 minutos (Base)'}
-                      </span>
-                    </div>
+
+                    {/* Beneficio aplicado */}
+                    {parkingBenefitType === 'time_extension' ? (
+                      <div className="flex justify-between py-1 border-b border-slate-100">
+                        <span className="text-slate-500">Tiempo total amparado:</span>
+                        <span className="font-bold text-slate-900">
+                          {session?.is_extended ? '60 minutos (Base 30m + 30m Comercio)' : '30 minutos (Base)'}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex justify-between py-1 border-b border-slate-100 bg-green-50/60 p-1.5 rounded">
+                        <span className="text-green-800 font-semibold">Coste Telpark devuelto:</span>
+                        <span className="font-bold text-green-700 text-sm">+{telparkCost} € Reembolsado</span>
+                      </div>
+                    )}
+
                     {lastValidation && (
                       <div className="flex justify-between py-1 border-b border-slate-100 text-blue-900 bg-blue-50/50 px-1 rounded">
-                        <span className="text-blue-700 font-medium">Validado en comercio:</span>
+                        <span className="text-blue-700 font-medium">Financiado por comercio:</span>
                         <span className="font-bold">{lastValidation.merchant_name}</span>
                       </div>
                     )}
                     <div className="flex justify-between py-1">
-                      <span className="text-slate-500">Código de control:</span>
+                      <span className="text-slate-500">Código de control oficial:</span>
                       <span className="font-mono text-[11px] text-slate-600">
                         {lastValidation?.verification_hash || 'CPK-9284F'}
                       </span>
@@ -425,17 +488,28 @@ export default function App() {
                       <span className="block text-xs text-slate-500 mt-1">Tiempo restante</span>
                     </div>
 
-                    {/* Banner de estado de ampliación */}
+                    {/* Banner de beneficio (Ampliación o Reembolso) */}
                     {session.is_extended ? (
                       <div className="bg-green-50 border border-green-200 text-green-800 p-2.5 rounded-lg text-xs font-medium flex items-center justify-center space-x-1.5">
                         <CheckCircle2 className="w-4 h-4 text-green-600" />
                         <span><strong>+30 min sumados</strong> por compra en {lastValidation?.merchant_name}</span>
                       </div>
+                    ) : refundApplied ? (
+                      <div className="bg-green-50 border border-green-200 text-green-800 p-2.5 rounded-lg text-xs font-medium flex items-center justify-center space-x-1.5">
+                        <DollarSign className="w-4 h-4 text-green-600" />
+                        <span><strong>Ticket de {telparkCost} € pagado</strong> por {lastValidation?.merchant_name}</span>
+                      </div>
                     ) : (
                       <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg text-left text-xs flex justify-between items-center">
                         <div>
-                          <p className="font-bold text-blue-950">¿Necesitas más tiempo?</p>
-                          <p className="text-blue-800 text-[11px]">Compra en cualquier tienda y suma +30 min.</p>
+                          <p className="font-bold text-blue-950">
+                            {parkingBenefitType === 'time_extension' ? '¿Necesitas más tiempo?' : '¿Quieres que te paguen el parking?'}
+                          </p>
+                          <p className="text-blue-800 text-[11px]">
+                            {parkingBenefitType === 'time_extension' 
+                              ? 'Compra en cualquier tienda y suma +30 min.'
+                              : `Compra en el comercio local y te abonan los ${telparkCost} €.`}
+                          </p>
                         </div>
                         <button 
                           onClick={() => setCurrentView('scanner')}
@@ -457,7 +531,7 @@ export default function App() {
                       </button>
 
                       <button 
-                        onClick={() => { setSession(null); setLastValidation(null); }}
+                        onClick={() => { setSession(null); setLastValidation(null); setRefundApplied(false); }}
                         className="w-full py-2 text-xs text-red-600 hover:text-red-700 font-medium transition"
                       >
                         Finalizar estacionamiento
@@ -467,6 +541,29 @@ export default function App() {
                 ) : (
                   /* SI NO HAY SESIÓN ACTIVA: SELECTOR SIMPLE DE CALLE (TIPO TELPARK) */
                   <div className="space-y-4">
+                    
+                    {/* Caja de Telpark Refund si está activo */}
+                    {parkingBenefitType === 'ticket_reimbursement' && (
+                      <div className="p-4 rounded-xl border border-blue-200 bg-blue-50/60 text-xs space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="font-bold text-blue-950">Coste de tu ticket Telpark / Zona Azul:</span>
+                          <div className="flex items-center space-x-1">
+                            <input 
+                              type="number" 
+                              step="0.10"
+                              value={telparkCost}
+                              onChange={(e) => setTelparkCost(e.target.value)}
+                              className="w-16 p-1 border border-blue-300 rounded font-bold text-center bg-white text-slate-900"
+                            />
+                            <span className="font-bold text-slate-700">€</span>
+                          </div>
+                        </div>
+                        <p className="text-[11px] text-blue-800">
+                          Al comprar en cualquier comercio asociado, el tendero te descuenta estos {telparkCost} € de tu compra al escanear el QR.
+                        </p>
+                      </div>
+                    )}
+
                     <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-4 shadow-sm">
                       <div className="flex items-center space-x-2 text-slate-700 text-xs font-medium">
                         <MapPin className="w-4 h-4 text-blue-600" />
@@ -510,19 +607,19 @@ export default function App() {
                       </button>
                     </div>
 
-                    {/* Explicación simple y humana (sin rollos de marketing) */}
+                    {/* Explicación simple y humana */}
                     <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-2 text-xs">
-                      <p className="font-bold text-slate-900">¿Cómo funciona la Zona Rosa en Sarriguren?</p>
+                      <p className="font-bold text-slate-900">¿Cómo funciona la bonificación de aparcamiento?</p>
                       <ul className="text-slate-600 space-y-1 text-[11px] list-disc list-inside">
-                        <li>El estacionamiento es <strong>100% gratuito</strong> con un límite inicial de 30 minutos.</li>
-                        <li>Si haces cualquier compra en el comercio local, pides el código en caja y <strong>sumas otros 30 minutos gratis</strong>.</li>
-                        <li>No necesitas ticket en papel: el sistema sincroniza con la Policía Municipal.</li>
+                        <li>En <strong>Zona Rosa de Sarriguren</strong>: Tienes 30 min gratis y sumas otros 30 min gratis al comprar en una tienda local.</li>
+                        <li>En <strong>Zona de Pago Telpark</strong>: El comercio te reembolsa el ticket de aparcamiento directamente en tu compra.</li>
+                        <li>Cero papel: sincronizado con la Policía Municipal y el Ayuntamiento.</li>
                       </ul>
                     </div>
 
                     {/* Comercios adheridos */}
                     <div>
-                      <p className="text-xs font-bold text-slate-700 mb-2">Comercios donde puedes ampliar tiempo:</p>
+                      <p className="text-xs font-bold text-slate-700 mb-2">Comercios adheridos que te pagan el parking:</p>
                       <div className="grid grid-cols-2 gap-2 text-xs">
                         {merchants.map(m => (
                           <div key={m.id} className="p-2.5 rounded-lg border border-slate-200 bg-white">
@@ -551,7 +648,7 @@ export default function App() {
               <span className="text-[10px] font-bold uppercase text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
                 Punto de Venta Oficial
               </span>
-              <h2 className="text-lg font-bold text-slate-900">Tótem de Validación</h2>
+              <h2 className="text-lg font-bold text-slate-900">Tótem de Validación en Mostrador</h2>
               <p className="text-xs text-slate-500">Muestra este código al cliente tras su compra</p>
             </div>
 
@@ -573,14 +670,14 @@ export default function App() {
 
             <div className="bg-white border-2 border-slate-200 rounded-2xl p-6 text-center space-y-3 shadow-sm">
               <h3 className="font-bold text-slate-900 text-base">{selectedMerchant.name}</h3>
-              <p className="text-xs text-blue-600 font-medium">Validación +30 Minutos Zona Rosa</p>
+              <p className="text-xs text-blue-600 font-medium">Validación +30 Minutos o Reembolso Telpark</p>
 
               <div className="w-52 h-52 bg-slate-50 p-4 border border-slate-200 rounded-xl mx-auto flex flex-col items-center justify-center">
                 <QrCode className="w-40 h-40 text-slate-900" />
               </div>
 
               <p className="text-xs text-slate-500">
-                El cliente escanea este código desde la app Compark para ampliar su estacionamiento sin coste.
+                El cliente escanea este código desde la app Compark para ampliar su estacionamiento o descontar su ticket de Telpark.
               </p>
             </div>
           </main>
@@ -652,6 +749,81 @@ export default function App() {
                 </div>
               </div>
             )}
+          </main>
+        )}
+
+        {/* ========================================================= */}
+        {/* VISTA 4: PANEL DEL AYUNTAMIENTO (SMART CITY DASHBOARD)   */}
+        {/* ========================================================= */}
+        {appRole === 'council' && (
+          <main className="flex-1 p-5 space-y-4">
+            <div className="text-center space-y-1">
+              <span className="text-[10px] font-bold uppercase text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                Área de Movilidad y Comercio
+              </span>
+              <h2 className="text-lg font-bold text-slate-900">Ayuntamiento del Valle de Egüés</h2>
+              <p className="text-xs text-slate-500">Telemetría de rotación de plazas y comercio de proximidad</p>
+            </div>
+
+            {/* KPI Cards */}
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                <span className="text-[11px] text-slate-500 block">Vehículos rotados hoy</span>
+                <span className="text-2xl font-bold text-slate-900 mt-0.5 block">418</span>
+                <span className="text-[10px] text-emerald-600 font-semibold">+24% vs semana previa</span>
+              </div>
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                <span className="text-[11px] text-slate-500 block">Tickets bonificados</span>
+                <span className="text-2xl font-bold text-blue-600 mt-0.5 block">182</span>
+                <span className="text-[10px] text-slate-500">18,40 € ticket medio</span>
+              </div>
+            </div>
+
+            {/* Ocupación por calle */}
+            <div className="p-4 bg-white border border-slate-200 rounded-xl space-y-3 text-xs shadow-sm">
+              <h3 className="font-bold text-slate-900 uppercase text-[11px] tracking-wider">
+                Ocupación de Zona Rosa en Tiempo Real
+              </h3>
+
+              <div className="space-y-2.5">
+                <div>
+                  <div className="flex justify-between text-[11px] mb-1">
+                    <span className="text-slate-700">Av. Reino de Navarra (Zona Comercial)</span>
+                    <span className="font-bold text-amber-600">68% ocupación</span>
+                  </div>
+                  <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                    <div className="bg-amber-500 h-full w-[68%] rounded-full"></div>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex justify-between text-[11px] mb-1">
+                    <span className="text-slate-700">Av. Erripagaña</span>
+                    <span className="font-bold text-green-600">42% ocupación</span>
+                  </div>
+                  <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                    <div className="bg-green-500 h-full w-[42%] rounded-full"></div>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex justify-between text-[11px] mb-1">
+                    <span className="text-slate-700">Centro de Salud / Servicios</span>
+                    <span className="font-bold text-red-600">89% ocupación</span>
+                  </div>
+                  <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                    <div className="bg-red-500 h-full w-[89%] rounded-full"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900 space-y-1">
+              <p className="font-bold">Retorno de inversión para el Valle:</p>
+              <p className="text-[11px] text-blue-800">
+                Por cada 1 € de aparcamiento bonificado se han generado 14 € de facturación directa en las tiendas del municipio.
+              </p>
+            </div>
           </main>
         )}
 
