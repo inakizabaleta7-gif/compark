@@ -1,0 +1,24 @@
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+  ],
+  theme: {
+    extend: {
+      colors: {
+        emerald: {
+          500: '#10b981',
+          600: '#059669',
+          700: '#047857',
+        },
+        slate: {
+          850: '#151e2e',
+          900: '#0f172a',
+          950: '#020617',
+        }
+      }
+    },
+  },
+  plugins: [],
+}
